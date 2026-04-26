@@ -1,0 +1,29 @@
+# Security
+.env
+.env.*
+!.env.example
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Databases
+postgres_data/
+*.db
+*.sqlite3
+
+# Logs
+*.log
+
+# Project specific
+outputs/
+runpod-volume/
+prompt-cache/
+.DS_Store
+
+# Virtual Environments
+venv/
+env/
+.venv/
+.env/

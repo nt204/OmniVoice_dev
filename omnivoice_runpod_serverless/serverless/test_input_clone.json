@@ -1,0 +1,25 @@
+{
+  "input": {
+    "text": "San pham moi da co mat hom nay. Mua ngay de nhan uu dai dac biet.",
+    "language": "vi",
+    "mode": "clone",
+    "voice_preset": "vi_nam_qc",
+    "emotion": "Hao hung (Excited)",
+    "ad_emphasis": "Cuong dieu nhe",
+    "preprocess_reference": true,
+    "ref_trim_silence": true,
+    "ref_apply_vad": true,
+    "ref_apply_denoise": true,
+    "ref_apply_rms_normalize": true,
+    "ref_trim_top_db": 35,
+    "ref_vad_top_db": 32,
+    "ref_max_internal_silence_ms": 120,
+    "ref_denoise_strength": 0.18,
+    "ref_target_rms_dbfs": -22.0,
+    "ref_min_seconds": 1.5,
+    "ref_max_seconds": 10.0,
+    "return_base64": false,
+    "save_output": true,
+    "debug": false
+  }
+}

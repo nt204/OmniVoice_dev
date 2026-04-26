@@ -1,0 +1,12 @@
+{
+  "input": {
+    "text": "Xin chao tu OmniVoice local docker test.",
+    "language": "vi",
+    "mode": "design",
+    "emotion": "Mac dinh",
+    "ad_emphasis": "Khong bo tro",
+    "return_base64": false,
+    "save_output": true,
+    "debug": false
+  }
+}

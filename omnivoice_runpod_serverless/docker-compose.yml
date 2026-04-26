@@ -1,0 +1,76 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: omnivoice-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      OMNIVOICE_ADMIN_USER: ${OMNIVOICE_ADMIN_USER}
+      OMNIVOICE_ADMIN_PASSWORD: ${OMNIVOICE_ADMIN_PASSWORD}
+      OMNIVOICE_VIEWER_USER: ${OMNIVOICE_VIEWER_USER}
+      OMNIVOICE_VIEWER_PASSWORD: ${OMNIVOICE_VIEWER_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - omnivoice-net
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    image: nguyendangtri070304/omnivoice-runpod-web:latest
+    container_name: omnivoice-web
+    restart: unless-stopped
+    env_file:
+      - .env
+      - web/.env.runpod-web
+    environment:
+      - DATABASE_URL=postgresql+psycopg://${OMNIVOICE_ADMIN_USER}:${OMNIVOICE_ADMIN_PASSWORD}@db:${POSTGRES_PORT:-5432}/${POSTGRES_DB}
+    ports:
+      - "${WEB_PORT:-7860}:7860"
+    volumes:
+      - "${PROMPT_VOICE_DIR:-./prompt_voices}:/app/prompt_voices"
+      - "./app:/app/app"
+      - "./web:/app/web"
+      - "./web/fastapi_app.py:/app/fastapi_app.py"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:7860/api/voice-library', timeout=5)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - omnivoice-net
+
+  adminer:
+    image: adminer:latest
+    container_name: omnivoice-adminer
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - omnivoice-net
+
+networks:
+  omnivoice-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
