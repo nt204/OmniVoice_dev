@@ -445,6 +445,7 @@ class OmniVoiceService:
                 "audio_path": preset["audio_path"],
                 "reference_text_path": preset["reference_text_path"],
                 "reference_text_exists": preset["reference_text_exists"],
+                "default_config": dict(preset.get("default_config") or {}),
                 "style_tags": preset.get("style_tags", []),
                 "source": "preset_audio" if using_preset_audio else "manual_reference_override",
                 "selection": {
@@ -521,8 +522,15 @@ class OmniVoiceService:
         ad_emphasis = preset_resolution["ad_emphasis"]
         manual_overrides = preset_resolution["manual_overrides"]
         preset_meta = preset_resolution["preset_meta"]
+        preset_default_config = dict(preset_meta.get("default_config") or {}) if preset_meta else {}
 
-        cfg = get_effective_config(language, emotion, ad_emphasis, manual_overrides)
+        cfg = get_effective_config(
+            language,
+            emotion,
+            ad_emphasis,
+            manual_overrides,
+            base_overrides=preset_default_config,
+        )
         cfg = clamp_prosody(language, cfg)
         effective_gain_db = safe_gain_for_style(language, emotion, ad_emphasis, enabled=ad_safe)
         work_dir = work_dir or tempfile.mkdtemp(prefix="omnivoice-job-")
@@ -589,6 +597,8 @@ class OmniVoiceService:
             normalized_text,
             int(cfg["join_silence_ms"]),
             int(cfg["max_segment_chars"]) if cfg.get("max_segment_chars") else None,
+            20 if canonical_lang(language) == "my" else None,
+            language,
         )
         if not chunk_infos:
             chunk_infos = [{"text": normalized_text, "pause_ms": int(cfg["join_silence_ms"])}]

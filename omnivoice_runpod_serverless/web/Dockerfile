@@ -16,8 +16,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY app /app/app
 COPY web /app/web
-COPY web/fastapi_app.py /app/fastapi_app.py
 
 EXPOSE 7860
 
-CMD ["uvicorn", "fastapi_app:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["uvicorn", "web.fastapi_app:app", "--host", "0.0.0.0", "--port", "7860"]

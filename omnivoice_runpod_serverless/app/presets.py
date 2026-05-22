@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import re
 import unicodedata
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -82,11 +84,11 @@ DEPLOY_LANGUAGE_CONFIGS: Dict[str, Dict[str, Any]] = {
     },
     "my": {
         "num_step": 36,
-        "guidance_scale": 4.2,
-        "speed": 0.96,
+        "guidance_scale": 4.0,
+        "speed": 1.0,
         "pitch_shift": 1.0,
-        "join_silence_ms": 135,
-        "trailing_silence_ms": 260,
+        "join_silence_ms": 80,
+        "trailing_silence_ms": 150,
         "preprocess_prompt": True,
         "max_segment_chars": 90,
     },
@@ -641,10 +643,10 @@ VOICE_DEFINITIONS: Dict[str, List[Dict[str, Any]]] = {
     ],
     "th": [],
     "my": [
-        {"preset_key": "my_1", "label": "Myanmar 1", "folder": "myanmar_prompt_voice", "audio_file": "1_myanmar_audio_prompt.wav", "style_tags": ["neutral"], "aliases": ["1_myanmar_audio_prompt"]},
-        {"preset_key": "my_2", "label": "Myanmar 2", "folder": "myanmar_prompt_voice", "audio_file": "2_myanmar_audio_prompt.wav", "style_tags": ["gentle"], "aliases": ["2_myanmar_audio_prompt"]},
-        {"preset_key": "my_3", "label": "Myanmar 3", "folder": "myanmar_prompt_voice", "audio_file": "3_myanmar_audio_prompt.wav", "style_tags": ["advertising", "energetic"], "aliases": ["3_myanmar_audio_prompt"]},
-        {"preset_key": "my_4", "label": "Myanmar 4", "folder": "myanmar_prompt_voice", "audio_file": "4_myanmar_audio_prompt.wav", "style_tags": ["stable", "balanced"], "aliases": ["4_myanmar_audio_prompt"]},
+        {"preset_key": "my_1", "label": "female_rank_1", "folder": "myanmar_prompt_voice", "audio_file": "female_rank_1.wav", "style_tags": ["female", "neutral"], "aliases": ["female_rank_1", "1_myanmar_audio_prompt"]},
+        {"preset_key": "my_2", "label": "female_rank_2", "folder": "myanmar_prompt_voice", "audio_file": "female_rank_2.wav", "style_tags": ["female", "gentle"], "aliases": ["female_rank_2", "2_myanmar_audio_prompt"]},
+        {"preset_key": "my_3", "label": "male_rank_1", "folder": "myanmar_prompt_voice", "audio_file": "male_rank_1.wav", "style_tags": ["male", "energetic"], "aliases": ["male_rank_1", "3_myanmar_audio_prompt"]},
+        {"preset_key": "my_4", "label": "male_rank_2", "folder": "myanmar_prompt_voice", "audio_file": "male_rank_2.wav", "style_tags": ["male", "balanced"], "aliases": ["male_rank_2", "4_myanmar_audio_prompt"]},
     ],
 }
 
@@ -699,6 +701,98 @@ def _prompt_text(lang: str) -> str:
     return _read_text_if_exists(path) if path else ""
 
 
+PROMPT_META_KEY_MAP: Dict[str, str] = {
+    "speed": "speed",
+    "numstep": "num_step",
+    "num_step": "num_step",
+    "guidance": "guidance_scale",
+    "guidancescale": "guidance_scale",
+    "guidance_scale": "guidance_scale",
+    "pitch": "pitch_shift",
+    "pitchshift": "pitch_shift",
+    "pitch_shift": "pitch_shift",
+}
+
+
+def _clean_prompt_meta_key(raw_key: str) -> Optional[str]:
+    normalized = "".join(ch for ch in str(raw_key or "").strip().lower() if ch.isalnum() or ch == "_")
+    return PROMPT_META_KEY_MAP.get(normalized)
+
+
+def _parse_prompt_meta_token(token: str) -> Optional[tuple[str, Any]]:
+    match = re.match(r"^\s*([A-Za-z_]+)\s*[:=]?\s*(-?\d+(?:\.\d+)?)\s*$", str(token or ""))
+    if not match:
+        return None
+    key = _clean_prompt_meta_key(match.group(1))
+    if not key:
+        return None
+    raw_value = float(match.group(2))
+    value: Any = int(raw_value) if key == "num_step" else raw_value
+    return key, value
+
+
+def _parse_prompt_entry_line(line: str) -> Optional[Dict[str, Any]]:
+    cleaned = str(line or "").strip()
+    if not cleaned or ":" not in cleaned:
+        return None
+    audio_file, payload = cleaned.split(":", 1)
+    audio_file = audio_file.strip()
+    payload = payload.strip()
+    if not audio_file or not payload:
+        return None
+
+    parts = [part.strip() for part in payload.split(",")]
+    if not parts:
+        return None
+
+    text = parts[0]
+    default_config: Dict[str, Any] = {}
+    for token in parts[1:]:
+        parsed = _parse_prompt_meta_token(token)
+        if parsed:
+            key, value = parsed
+            default_config[key] = value
+
+    return {
+        "audio_file": audio_file,
+        "reference_text": text,
+        "default_config": default_config,
+    }
+
+
+@lru_cache(maxsize=16)
+def _prompt_entries_for_lang(lang: str) -> Dict[str, Dict[str, Any]]:
+    path = _prompt_text_path(lang)
+    if not path or not path.exists():
+        return {}
+
+    entries: Dict[str, Dict[str, Any]] = {}
+    try:
+        raw_lines = path.read_text(encoding="utf-8").splitlines()
+    except Exception:
+        return {}
+
+    for line in raw_lines:
+        entry = _parse_prompt_entry_line(line)
+        if not entry:
+            continue
+        audio_file = str(entry["audio_file"])
+        entries[audio_file.lower()] = entry
+        entries[Path(audio_file).stem.lower()] = entry
+    return entries
+
+
+def _prompt_entry_for_audio(lang: str, audio_file: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not audio_file:
+        return None
+    entries = _prompt_entries_for_lang(lang)
+    if not entries:
+        return None
+    filename = Path(str(audio_file)).name.lower()
+    stem = Path(str(audio_file)).stem.lower()
+    return entries.get(filename) or entries.get(stem)
+
+
 def get_emotion_presets_for_lang(lang: str) -> Dict[str, Any]:
     lang = canonical_lang(lang)
     return EMOTION_PRESETS_BY_LANG.get(lang, EMOTION_PRESETS_BY_LANG.get("vi", {}))
@@ -725,11 +819,17 @@ def _resolve_style_key(options: Dict[str, Any], key: Optional[str]) -> Optional[
     return None
 
 
-def get_lang_config(lang: str, overrides: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def get_lang_config(
+    lang: str,
+    overrides: Optional[Dict[str, Any]] = None,
+    base_overrides: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     lang = canonical_lang(lang)
     cfg = dict(BASE_OMNI_CONFIG)
     cfg.update(LANGUAGE_PRESETS.get(lang, {}))
     cfg.update(DEPLOY_LANGUAGE_CONFIGS.get(lang, {}))
+    if base_overrides:
+        cfg.update({key: value for key, value in base_overrides.items() if value is not None})
     if overrides:
         cfg.update({key: value for key, value in overrides.items() if value is not None})
     return cfg
@@ -740,9 +840,10 @@ def get_effective_config(
     emotion_key: str,
     ad_key: str = "Không bổ trợ",
     manual_overrides: Optional[Dict[str, Any]] = None,
+    base_overrides: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     lang = canonical_lang(lang)
-    cfg = get_lang_config(lang)
+    cfg = get_lang_config(lang, base_overrides=base_overrides)
     ad_options = get_ad_presets_for_lang(lang)
     emotion_options = get_emotion_presets_for_lang(lang)
     resolved_ad_key = _resolve_style_key(ad_options, ad_key)
@@ -791,7 +892,7 @@ def clamp_prosody(lang: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
         speed_min, speed_max = 0.88, 1.18
         pitch_min, pitch_max = 0.95, 1.08
     elif lang == "my":
-        speed_min, speed_max = 0.90, 1.12
+        speed_min, speed_max = 0.90, 2.0
         pitch_min, pitch_max = 0.96, 1.06
     else:
         speed_min, speed_max = 0.88, 1.15
@@ -810,7 +911,9 @@ def _build_voice_preset(defn: Dict[str, Any], lang: str) -> Dict[str, Any]:
     if PROMPT_VOICE_ROOT:
         audio_path = PROMPT_VOICE_ROOT / str(defn["folder"]) / str(defn["audio_file"])
     ref_text_path = _prompt_text_path(lang)
-    ref_text = _prompt_text(lang)
+    prompt_entry = _prompt_entry_for_audio(lang, str(defn["audio_file"]))
+    ref_text = str(prompt_entry.get("reference_text") or "") if prompt_entry else _prompt_text(lang)
+    default_config = dict(prompt_entry.get("default_config", {})) if prompt_entry else {}
     return {
         "preset_key": str(defn["preset_key"]),
         "label": str(defn["label"]),
@@ -820,6 +923,7 @@ def _build_voice_preset(defn: Dict[str, Any], lang: str) -> Dict[str, Any]:
         "reference_text_path": str(ref_text_path) if ref_text_path else "",
         "reference_text": ref_text,
         "reference_text_exists": bool(ref_text_path and ref_text_path.exists() and ref_text),
+        "default_config": default_config,
         "style_tags": list(defn.get("style_tags", [])),
         "aliases": list(defn.get("aliases", [])),
     }

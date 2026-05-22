@@ -316,6 +316,12 @@ def seed_voice_presets(db: Session) -> None:
                     style_tags=tags,
                 )
                 db.add(vp)
+            else:
+                existing.label = str(defn["label"])
+                existing.language = lang
+                existing.folder = str(defn["folder"])
+                existing.audio_file = str(defn["audio_file"])
+                existing.style_tags = ",".join(defn.get("style_tags", []))
     db.commit()
 
 
@@ -403,6 +409,7 @@ def _voice_status(lang: str, voice_preset: Optional[str]) -> Dict[str, Any]:
             "reference_text": "",
             "preview_audio_url": None,
             "voice_preset": None,
+            "default_config": {},
         }
 
     preview_audio_url = f"/api/preset-audio/{preset['preset_key']}" if preset.get("exists") else None
@@ -418,11 +425,13 @@ def _voice_status(lang: str, voice_preset: Optional[str]) -> Dict[str, Any]:
         "reference_text": str(preset.get("reference_text") or ""),
         "preview_audio_url": preview_audio_url,
         "voice_preset": resolved_key,
+        "default_config": dict(preset.get("default_config") or {}),
     }
 
 
 def _state_for_lang(
     lang: str,
+    voice_preset: Optional[str] = None,
     control_mode: str = "preset",
     current_speed: Optional[float] = None,
     current_pitch: Optional[float] = None,
@@ -431,7 +440,7 @@ def _state_for_lang(
 ) -> Dict[str, Any]:
     lang = canonical_lang(lang)
     voice_choices = _voice_choices(lang)
-    voice_key = voice_choices[0]["value"] if voice_choices else None
+    voice_key = voice_preset or (voice_choices[0]["value"] if voice_choices else None)
     voice_status = _voice_status(lang, voice_key)
     emotions = list(get_emotion_presets_for_lang(lang).keys())
     ads = list(get_ad_presets_for_lang(lang).keys())
@@ -445,7 +454,12 @@ def _state_for_lang(
             "guidance_scale": current_guidance_scale or 3.9,
         }
     else:
-        cfg = get_effective_config(lang, emotion_key, ad_key)
+        cfg = get_effective_config(
+            lang,
+            emotion_key,
+            ad_key,
+            base_overrides=voice_status.get("default_config"),
+        )
     return {
         "lang": lang,
         "text": DEFAULT_TEXTS.get(lang, ""),
@@ -468,6 +482,7 @@ def _prosody_state(
     lang: str,
     emotion: str,
     ad_emphasis: str,
+    voice_preset: Optional[str] = None,
     control_mode: str = "preset",
     current_speed: Optional[float] = None,
     current_pitch: Optional[float] = None,
@@ -475,6 +490,8 @@ def _prosody_state(
     current_guidance_scale: Optional[float] = None,
 ) -> Dict[str, Any]:
     lang = canonical_lang(lang)
+    _, preset = _resolve_voice_preset_for_lang(lang, voice_preset)
+    base_overrides = dict(preset.get("default_config") or {}) if preset else {}
     if control_mode == "custom":
         cfg = {
             "speed": current_speed or 1.0,
@@ -483,7 +500,7 @@ def _prosody_state(
             "guidance_scale": current_guidance_scale or 3.9,
         }
     else:
-        cfg = get_effective_config(lang, emotion, ad_emphasis)
+        cfg = get_effective_config(lang, emotion, ad_emphasis, base_overrides=base_overrides)
     return {
         "config": {
             "speed": float(cfg.get("speed", 1.0)),
@@ -1422,6 +1439,7 @@ def index() -> HTMLResponse:
     async function loadState(lang = el.lang.value) {{
       const params = new URLSearchParams({{
         lang,
+        voice_preset: el.voice_preset.value,
         control_mode: el.control_mode.value,
         speed: el.speed.value,
         pitch_shift: el.pitch_shift.value,
@@ -1461,11 +1479,13 @@ def index() -> HTMLResponse:
       el.preset_preview.src = data.preview_audio_url || "";
       el.preset_preview.load();
       syncPreviewPriority();
+      await syncProsody();
     }}
 
     async function syncProsody() {{
       const params = new URLSearchParams({{
         lang: el.lang.value,
+        voice_preset: el.voice_preset.value,
         emotion: el.emotion.value,
         ad_emphasis: el.ad_emphasis.value,
         control_mode: el.control_mode.value,
@@ -1739,13 +1759,14 @@ def voice_library() -> Dict[str, Any]:
 @app.get("/api/state")
 def state(
     lang: str = "vi",
+    voice_preset: Optional[str] = None,
     control_mode: str = "preset",
     speed: Optional[float] = None,
     pitch_shift: Optional[float] = None,
     num_step: Optional[float] = None,
     guidance_scale: Optional[float] = None,
 ) -> Dict[str, Any]:
-    return _state_for_lang(lang, control_mode, speed, pitch_shift, num_step, guidance_scale)
+    return _state_for_lang(lang, voice_preset, control_mode, speed, pitch_shift, num_step, guidance_scale)
 
 
 @app.get("/api/preset-status")
@@ -1758,6 +1779,7 @@ def prosody(
     lang: str = "vi",
     emotion: str = "Mặc định",
     ad_emphasis: str = "Không bổ trợ",
+    voice_preset: Optional[str] = None,
     control_mode: str = "preset",
     speed: Optional[float] = None,
     pitch_shift: Optional[float] = None,
@@ -1768,6 +1790,7 @@ def prosody(
         lang=lang,
         emotion=emotion,
         ad_emphasis=ad_emphasis,
+        voice_preset=voice_preset,
         control_mode=control_mode,
         current_speed=speed,
         current_pitch=pitch_shift,
@@ -2018,7 +2041,8 @@ async def synthesize(
                         "pitch_shift": pitch_shift,
                         "num_step": num_step,
                         "guidance_scale": guidance_scale,
-                    }
+                    },
+                    base_overrides=dict(resolved_preset.get("default_config") or {}) if resolved_preset else None,
                 )
                 
                 logged_cfg = result.get("config") or effective_cfg

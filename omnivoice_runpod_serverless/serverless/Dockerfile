@@ -14,8 +14,6 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
-    git \
-    curl \
     ca-certificates \
     libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
@@ -29,11 +27,9 @@ COPY serverless/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY app /app/app
-COPY web /app/web
 COPY serverless/handler.py /app/handler.py
-COPY web/fastapi_app.py /app/fastapi_app.py
 COPY serverless/test_input_clone.json /app/test_input_clone.json
 COPY serverless/test_input_design.json /app/test_input_design.json
 COPY serverless/test_input_list_presets.json /app/test_input_list_presets.json
 
-CMD ["python", "-u", "handler.py"]
+CMD ["python", "-u", "/app/handler.py"]

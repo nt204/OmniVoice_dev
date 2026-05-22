@@ -215,11 +215,65 @@ def _split_segment_to_max_chars(segment: str, max_chars: Optional[int]) -> List[
             start += max_chars
     return [_restore_numeric_punctuation(part) for part in final_parts if part]
 
+def _merge_short_chunks(
+    chunks: List[Dict[str, Any]],
+    max_chars: Optional[int],
+    min_chars: Optional[int],
+) -> List[Dict[str, Any]]:
+    if not chunks or not max_chars or not min_chars:
+        return chunks
+
+    merged: List[Dict[str, Any]] = []
+    idx = 0
+    while idx < len(chunks):
+        current = dict(chunks[idx])
+        current_text = str(current.get("text", "")).strip()
+        if not current_text:
+            idx += 1
+            continue
+
+        current["text"] = current_text
+        current_len = len(current_text)
+        if current_len >= min_chars:
+            merged.append(current)
+            idx += 1
+            continue
+
+        is_terminal_short_chunk = current_text.endswith((".", "!", "?", "။", "。", "؟", "！", "？"))
+
+        if idx + 1 < len(chunks):
+            next_chunk = dict(chunks[idx + 1])
+            next_text = str(next_chunk.get("text", "")).strip()
+            if next_text:
+                combined = f"{current_text} {next_text}".strip()
+                if len(combined) <= max_chars:
+                    next_chunk["text"] = combined
+                    next_chunk["pause_ms"] = int(next_chunk.get("pause_ms", current.get("pause_ms", 0)))
+                    chunks[idx + 1] = next_chunk
+                    idx += 1
+                    continue
+
+        if merged and not is_terminal_short_chunk:
+            prev = dict(merged[-1])
+            combined = f"{prev['text']} {current_text}".strip()
+            if len(combined) <= max_chars:
+                prev["text"] = combined
+                prev["pause_ms"] = int(current.get("pause_ms", prev.get("pause_ms", 0)))
+                merged[-1] = prev
+                idx += 1
+                continue
+
+        merged.append(current)
+        idx += 1
+
+    return merged
+
 def segment_text_with_pauses(
     text: str,
     join_silence_ms: int,
     max_chars: Optional[int] = None,
     min_chars: Optional[int] = None,
+    lang: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     pause_scale = {
         ",": 0.75,
@@ -237,6 +291,9 @@ def segment_text_with_pauses(
         "；": 0.95,
         "៖": 1.0,
     }
+    if canonical_lang(lang) == "my":
+        pause_scale["၊"] = 0.66
+        pause_scale["။"] = 1.00
     segments = clean_and_segment_text(text)
     result: List[Dict[str, Any]] = []
     base_pause = max(40, int(join_silence_ms))
@@ -246,6 +303,7 @@ def segment_text_with_pauses(
             ending = piece[-1] if piece else ""
             pause_ms = int(base_pause * pause_scale.get(ending, 0.9 if idx < len(split_segments) - 1 else 1.0))
             result.append({"text": piece, "pause_ms": pause_ms})
+    result = _merge_short_chunks(result, max_chars=max_chars, min_chars=min_chars)
     if not result and text.strip():
         result.append({"text": text.strip(), "pause_ms": base_pause})
     return result
