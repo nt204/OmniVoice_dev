@@ -1696,9 +1696,9 @@ def index() -> HTMLResponse:
       }});
       const data = await res.json();
       if (res.ok) {{
-        localStorage.setItem('ov_token', data.access_token);
+        localStorage.removeItem('ov_token');
         checkAuth();
-        setMessage("Đăng ký thành công", "success");
+        setMessage(data.message || "Đăng ký thành công", "success");
       }} else {{
         let msg = "Đăng ký thất bại";
         if (data.detail) {{
@@ -1750,8 +1750,9 @@ def index() -> HTMLResponse:
       }}
     }}
 
-    window.loadJobToUI = (job, announce = true) => {{
+    window.loadJobToUI = async (job, announce = true) => {{
       el.lang.value = job.language;
+      await loadState(job.language);
       el.text.value = job.text;
       if (job.voice_preset) el.voice_preset.value = job.voice_preset;
       if (job.emotion) el.emotion.value = job.emotion;
@@ -1782,7 +1783,7 @@ def index() -> HTMLResponse:
     }}
 
     checkAuth();
-    loadState("vi");
+    loadState(el.lang.value);
   </script>
 
   <!-- Docs Modal -->
