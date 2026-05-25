@@ -51,6 +51,8 @@ DEFAULT_TEXTS: Dict[str, str] = {
     "my": "ယနေ့ခေတ်တွင် နည်းပညာသည် ကျွန်ုပ်တို့၏ဘဝကို ပိုမိုလွယ်ကူစေပါသည်။ အကောင်းဆုံးသော ဝန်ဆောင်မှုများနှင့် ထူးခြားဆန်းသစ်သည့် အတွေ့အကြုံများကို ရယူရန်အတွက် ကျွန်ုပ်တို့နှင့် လက်တွဲလိုက်ပါ။ အောင်မြင်မှုဆီသို့ အတူတူလှမ်းကြပါစို့။",
 }
 
+DEFAULT_UI_LANGUAGE = "my"
+
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -703,7 +705,8 @@ def get_user_optional(
 @app.get("/", response_class=HTMLResponse)
 def index() -> HTMLResponse:
     lang_options = "".join(
-        f'<option value="{key}">{key} - {label}</option>' for key, label in LANGUAGE_LABELS.items()
+        f'<option value="{key}"{" selected" if key == DEFAULT_UI_LANGUAGE else ""}>{key} - {label}</option>'
+        for key, label in LANGUAGE_LABELS.items()
     )
     html = f"""<!doctype html>
 <html lang="vi">
@@ -1491,7 +1494,7 @@ def index() -> HTMLResponse:
       sourceHint.textContent = "No audio";
     }}
 
-    function syncPreviewPriority() {{
+    function syncPreviewPriority(announceUpload = false) {{
       const upload = referenceAudioInput.files[0];
       if (upload) {{
         if (inputPreviewObjectUrl) {{
@@ -1501,7 +1504,9 @@ def index() -> HTMLResponse:
         el.input_preview.src = inputPreviewObjectUrl;
         el.input_preview.load();
         inputPreviewNote.textContent = `Đang preview file upload: ${{upload.name}}`;
-        setMessage("Đã nhận audio upload.", "warning");
+        if (announceUpload) {{
+          setMessage("Đã nhận audio upload.", "warning");
+        }}
         updateModeHint();
         return;
       }}
@@ -1595,7 +1600,7 @@ def index() -> HTMLResponse:
     el.control_mode.addEventListener("change", syncProsody);
     el.emotion.addEventListener("change", syncProsody);
     el.ad_emphasis.addEventListener("change", syncProsody);
-    referenceAudioInput.addEventListener("change", syncPreviewPriority);
+    referenceAudioInput.addEventListener("change", () => syncPreviewPriority(true));
 
     document.getElementById("refresh_btn").addEventListener("click", async () => {{
       await loadState(el.lang.value);
@@ -1858,7 +1863,7 @@ def voice_library() -> Dict[str, Any]:
 
 @app.get("/api/state")
 def state(
-    lang: str = "vi",
+    lang: str = DEFAULT_UI_LANGUAGE,
     voice_preset: Optional[str] = None,
     control_mode: str = "preset",
     speed: Optional[float] = None,
@@ -1884,7 +1889,7 @@ def state(
 
 
 @app.get("/api/preset-status")
-def preset_status(lang: str = "vi", voice_preset: Optional[str] = None) -> Dict[str, Any]:
+def preset_status(lang: str = DEFAULT_UI_LANGUAGE, voice_preset: Optional[str] = None) -> Dict[str, Any]:
     return _voice_status(lang, voice_preset or _first_voice_key(lang))
 
 
