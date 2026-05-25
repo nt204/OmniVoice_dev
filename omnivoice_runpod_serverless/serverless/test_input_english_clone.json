@@ -1,0 +1,29 @@
+{
+  "input": {
+    "text": "Dr. Smith paid $20.50 for 2.5% growth today. Starting now, keep your routine simple, clear, and consistent.",
+    "language": "en",
+    "mode": "clone",
+    "reference_audio_path": "/tmp/reference_english.wav",
+    "ref_text": "The key is to stay consistent with a daily routine that supports comfortable movement.",
+    "emotion": "Mặc định",
+    "ad_emphasis": "Không bổ trợ",
+    "join_silence_ms": 95,
+    "trailing_silence_ms": 210,
+    "max_segment_chars": 150,
+    "preprocess_reference": true,
+    "ref_trim_silence": true,
+    "ref_apply_vad": true,
+    "ref_apply_denoise": false,
+    "ref_apply_rms_normalize": true,
+    "ref_trim_top_db": 35,
+    "ref_vad_top_db": 32,
+    "ref_max_internal_silence_ms": 120,
+    "ref_denoise_strength": 0.18,
+    "ref_target_rms_dbfs": -22.0,
+    "ref_min_seconds": 1.5,
+    "ref_max_seconds": 10.0,
+    "return_base64": false,
+    "save_output": true,
+    "debug": true
+  }
+}

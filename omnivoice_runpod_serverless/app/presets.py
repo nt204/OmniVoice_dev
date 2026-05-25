@@ -29,6 +29,7 @@ BASE_OMNI_CONFIG: Dict[str, Any] = {
 }
 
 LANGUAGE_LABELS: Dict[str, str] = {
+    "en": "English",
     "vi": "Vietnamese",
     "lo": "Lao",
     "km": "Khmer",
@@ -37,6 +38,7 @@ LANGUAGE_LABELS: Dict[str, str] = {
 }
 
 LANGUAGE_PRESETS: Dict[str, Dict[str, Any]] = {
+    "en": {"label": "English", "instruct": None},
     "vi": {"label": "Vietnamese", "instruct": "male, young adult"},
     "lo": {"label": "Lao", "instruct": "female, moderate pitch"},
     "km": {"label": "Khmer", "instruct": "male, moderate pitch"},
@@ -45,6 +47,15 @@ LANGUAGE_PRESETS: Dict[str, Dict[str, Any]] = {
 }
 
 DEPLOY_LANGUAGE_CONFIGS: Dict[str, Dict[str, Any]] = {
+    "en": {
+        "num_step": 32,
+        "guidance_scale": 2.5,
+        "speed": 0.97,
+        "join_silence_ms": 70,
+        "trailing_silence_ms": 80,
+        "min_join_silence_ms": 0,
+        "max_segment_chars": 220,
+    },
     "vi": {
         "num_step": 32,
         "guidance_scale": 3.9,
@@ -53,7 +64,7 @@ DEPLOY_LANGUAGE_CONFIGS: Dict[str, Dict[str, Any]] = {
         "join_silence_ms": 110,
         "trailing_silence_ms": 220,
         "preprocess_prompt": True,
-        "max_segment_chars": 110,
+        "max_segment_chars": 160,
     },
     "lo": {
         "num_step": 32,
@@ -94,6 +105,65 @@ DEPLOY_LANGUAGE_CONFIGS: Dict[str, Dict[str, Any]] = {
     },
 }
 EMOTION_PRESETS_BY_LANG: Dict[str, Dict[str, Dict[str, Any]]] = {
+    "en": {
+        "Mặc định": {
+            "overrides": {},
+            "gain_db": 0.0,
+        },
+
+        "Vui vẻ (Happy)": {
+            "overrides": {
+                "pitch_shift": 1.006,
+                "speed": 1.025,
+                "join_silence_ms": 88,
+                "trailing_silence_ms": 185,
+            },
+            "gain_db": 0.25,
+        },
+
+        "Buồn bã (Sad)": {
+            "overrides": {
+                "pitch_shift": 0.992,
+                "speed": 0.94,
+                "join_silence_ms": 125,
+                "trailing_silence_ms": 310,
+            },
+            "gain_db": -0.45,
+        },
+
+        "Hào hứng (Excited)": {
+            "overrides": {
+                "pitch_shift": 1.01,
+                "speed": 1.045,
+                "join_silence_ms": 76,
+                "trailing_silence_ms": 165,
+                "guidance_scale": 3.75,
+            },
+            "gain_db": 0.42,
+        },
+
+        "Giận dữ (Angry)": {
+            "overrides": {
+                "pitch_shift": 0.996,
+                "speed": 1.035,
+                "join_silence_ms": 74,
+                "trailing_silence_ms": 160,
+                "guidance_scale": 3.78,
+            },
+            "gain_db": 0.35,
+        },
+
+        "Nhẹ nhàng (Gentle)": {
+            "overrides": {
+                "pitch_shift": 1.0,
+                "speed": 0.965,
+                "join_silence_ms": 112,
+                "trailing_silence_ms": 260,
+            },
+            "gain_db": -0.2,
+        },
+    },
+
     "vi": {
         "Mặc định": {
             "overrides": {},
@@ -395,6 +465,57 @@ EMOTION_PRESETS_BY_LANG: Dict[str, Dict[str, Dict[str, Any]]] = {
 
 
 AD_PRESETS_BY_LANG: Dict[str, Dict[str, Dict[str, Any]]] = {
+    "en": {
+        "Không bổ trợ": {
+            "overrides": {},
+            "gain_db": 0.0,
+        },
+
+        "Cường điệu rất nhẹ": {
+            "overrides": {
+                "speed": 1.008,
+                "pitch_shift": 1.0,
+                "join_silence_ms": 88,
+                "trailing_silence_ms": 195,
+                "guidance_scale": 3.68,
+            },
+            "gain_db": 0.08,
+        },
+
+        "Cường điệu nhẹ": {
+            "overrides": {
+                "speed": 1.018,
+                "pitch_shift": 1.002,
+                "join_silence_ms": 82,
+                "trailing_silence_ms": 178,
+                "guidance_scale": 3.72,
+            },
+            "gain_db": 0.16,
+        },
+
+        "Cường điệu vừa": {
+            "overrides": {
+                "speed": 1.03,
+                "pitch_shift": 1.004,
+                "join_silence_ms": 74,
+                "trailing_silence_ms": 160,
+                "guidance_scale": 3.78,
+            },
+            "gain_db": 0.25,
+        },
+
+        "Cường điệu mạnh": {
+            "overrides": {
+                "speed": 1.04,
+                "pitch_shift": 1.006,
+                "join_silence_ms": 68,
+                "trailing_silence_ms": 145,
+                "guidance_scale": 3.85,
+            },
+            "gain_db": 0.34,
+        },
+    },
+
     "vi": {
         "Không bổ trợ": {
             "overrides": {},
@@ -605,6 +726,9 @@ AD_PRESETS_BY_LANG: Dict[str, Dict[str, Dict[str, Any]]] = {
 }
 
 LANGUAGE_ALIASES: Dict[str, str] = {
+    "en": "en",
+    "eng": "en",
+    "english": "en",
     "vi": "vi",
     "vn": "vi",
     "lo": "lo",
@@ -620,12 +744,22 @@ LANGUAGE_ALIASES: Dict[str, str] = {
 }
 
 PROMPT_TEXT_FILES: Dict[str, tuple[str, str]] = {
+    "en": ("english_prompt_voice", "english_prompt.txt"),
     "vi": ("vietnam_prompt_voice", "vietnam_prompt.txt"),
     "km": ("khmer_prompt_voice", "khmer_prompt.txt"),
     "my": ("myanmar_prompt_voice", "myanmar_prompt.txt"),
 }
 
 VOICE_DEFINITIONS: Dict[str, List[Dict[str, Any]]] = {
+    "en": [
+        {"preset_key": "en_male_1", "label": "male_1", "folder": "english_prompt_voice", "audio_file": "male_1.mp3", "style_tags": ["male", "natural", "conversational"], "aliases": ["male_1"]},
+        {"preset_key": "en_male_2", "label": "male_2", "folder": "english_prompt_voice", "audio_file": "male_2.mp3", "style_tags": ["male", "radio", "energetic"], "aliases": ["male_2"]},
+        {"preset_key": "en_male_3", "label": "male_3", "folder": "english_prompt_voice", "audio_file": "male_3.mp3", "style_tags": ["male", "plain", "natural"], "aliases": ["male_3"]},
+        {"preset_key": "en_female_1", "label": "female_1", "folder": "english_prompt_voice", "audio_file": "female_1.mp3", "style_tags": ["female", "bright", "friendly"], "aliases": ["female_1"]},
+        {"preset_key": "en_female_2", "label": "female_2", "folder": "english_prompt_voice", "audio_file": "female_2.mp3", "style_tags": ["female", "news", "social"], "aliases": ["female_2"]},
+        {"preset_key": "en_female_3", "label": "female_3", "folder": "english_prompt_voice", "audio_file": "female_3.mp3", "style_tags": ["female", "commercial", "clean"], "aliases": ["female_3"]},
+        {"preset_key": "en_female_4", "label": "female_4", "folder": "english_prompt_voice", "audio_file": "female_4.mp3", "style_tags": ["female", "lifestyle", "upbeat"], "aliases": ["female_4"]},
+    ],
     "vi": [
         {"preset_key": "vi_nam_ke_chuyen", "label": "Giọng nam kể chuyện", "folder": "vietnam_prompt_voice", "audio_file": "giong_nam_ke_chuyen.mp3", "style_tags": ["storytelling", "warm", "soft"], "aliases": ["giong_nam_ke_chuyen"]},
         {"preset_key": "vi_nam_qc", "label": "Giọng nam quảng cáo", "folder": "vietnam_prompt_voice", "audio_file": "giong_nam_qc.mp3", "style_tags": ["advertising", "bright", "decisive"], "aliases": ["giong_nam_qc"]},
@@ -657,7 +791,7 @@ def canonical_lang(lang: Optional[str]) -> str:
 
 
 def _looks_like_prompt_root(path: Path) -> bool:
-    expected = ("vietnam_prompt_voice", "khmer_prompt_voice", "myanmar_prompt_voice")
+    expected = ("english_prompt_voice", "vietnam_prompt_voice", "khmer_prompt_voice", "myanmar_prompt_voice")
     return path.exists() and path.is_dir() and any((path / name).exists() for name in expected)
 
 
@@ -745,9 +879,21 @@ def _parse_prompt_entry_line(line: str) -> Optional[Dict[str, Any]]:
     if not parts:
         return None
 
-    text = parts[0]
     default_config: Dict[str, Any] = {}
-    for token in parts[1:]:
+    text_parts = list(parts)
+    while text_parts:
+        parsed = _parse_prompt_meta_token(text_parts[-1])
+        if not parsed:
+            break
+        key, value = parsed
+        default_config[key] = value
+        text_parts.pop()
+
+    text = ", ".join(part for part in text_parts if part).strip()
+    if not text:
+        return None
+
+    for token in parts[len(text_parts):]:
         parsed = _parse_prompt_meta_token(token)
         if parsed:
             key, value = parsed
@@ -888,9 +1034,8 @@ def apply_ad_safe_guard(lang: str, cfg: Dict[str, Any], enabled: bool = True) ->
 def clamp_prosody(lang: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
     lang = canonical_lang(lang)
     clamped = dict(cfg)
-    if lang == "vi":
-        speed_min, speed_max = 0.88, 1.18
-        pitch_min, pitch_max = 0.95, 1.08
+    if lang in {"en", "vi"}:
+        return clamped
     elif lang == "my":
         speed_min, speed_max = 0.90, 2.0
         pitch_min, pitch_max = 0.96, 1.06

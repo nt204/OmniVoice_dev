@@ -1,0 +1,7 @@
+male_1 : Hey, Adam here. Let's create something that feels real, sounds human, and connects every time.
+male_2 : 96.5 The Buzz, Houston's classic rock station for the city. Hey, it's Mark Phillips, here's Aerosmith, Sweet Emotion on 96.5 The Buzz.
+male_3 : I think this is a really nice way to just talk naturally together, you know, talk plainly. Let's give it a shot.
+female_1 : Hi, I'm Amelia, a super high-quality English voice. I love to read, seriously, I'm a total bookworm. So, what are you waiting for? Get me reading!
+female_2 : Hey everyone, welcome back to the channel. Today, we're talking about all the latest news, trends, and celebrity gossip. Let's get into it!
+female_3 : Introducing the future of smart living, designed to simplify your day and save time. Get back to what matters most.
+female_4 : Turn up the good vibes. Smart design, effortless style, and comfort that fits your life. Try it once, and you'll never look back.

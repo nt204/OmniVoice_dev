@@ -51,6 +51,8 @@ _PEDALBOARD_MODULE: Any = None
 _PEDALBOARD_IMPORT_ERROR: Optional[Exception] = None
 _OMNIVOICE_CLASSES: Optional[Tuple[Any, Any]] = None
 _OMNIVOICE_IMPORT_ERROR: Optional[Exception] = None
+GUIDANCE_SCALE_MIN = 1.0
+GUIDANCE_SCALE_MAX = 5.0
 
 
 def _get_torch_module() -> Any:
@@ -129,6 +131,17 @@ def _apply_output_peak_guard(audio_np: np.ndarray, target_peak: float = 0.92) ->
     attenuation = float(target_peak) / peak
     attenuation_db = 20.0 * math.log10(max(attenuation, 1e-8))
     return (audio_np * attenuation).astype(np.float32), attenuation_db
+
+
+def _validate_guidance_scale(value: Optional[float]) -> Optional[float]:
+    if value is None:
+        return None
+    numeric = float(value)
+    if not (GUIDANCE_SCALE_MIN <= numeric <= GUIDANCE_SCALE_MAX):
+        raise ValueError(
+            f"guidance_scale must be between {GUIDANCE_SCALE_MIN:.1f} and {GUIDANCE_SCALE_MAX:.1f}"
+        )
+    return numeric
 
 def _normalize_device_name(value: Optional[str]) -> Optional[str]:
     if value is None:
@@ -229,6 +242,18 @@ def infer_mode(reference_audio_path: Optional[str], custom_instruct: Optional[st
     if custom_instruct and custom_instruct.strip():
         return "design"
     return "auto"
+
+
+def _apply_english_notebook_defaults(language: str, mode: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
+    if canonical_lang(language) != "en" or mode != "clone":
+        return dict(cfg)
+    notebook_cfg = dict(cfg)
+    notebook_cfg["speed"] = 0.97
+    notebook_cfg["join_silence_ms"] = 70
+    notebook_cfg["min_join_silence_ms"] = 0
+    notebook_cfg["trailing_silence_ms"] = 80
+    notebook_cfg["max_segment_chars"] = 220
+    return notebook_cfg
 
 class OmniVoiceService:
     def __init__(
@@ -367,10 +392,11 @@ class OmniVoiceService:
             pass
         return prompt
 
-    def _apply_pitch_shift(self, audio_np: np.ndarray, pitch_shift: float) -> np.ndarray:
+    def _apply_pitch_shift(self, audio_np: np.ndarray, pitch_shift: float, language: Optional[str] = None) -> np.ndarray:
         if pitch_shift is None or abs(float(pitch_shift) - 1.0) < 1e-6:
             return audio_np.astype(np.float32)
-        ratio = max(0.5, min(2.0, float(pitch_shift)))
+        raw_ratio = float(pitch_shift)
+        ratio = raw_ratio if canonical_lang(language) in {"en", "vi"} else max(0.5, min(2.0, raw_ratio))
         semitones = 12.0 * math.log2(ratio)
         try:
             pedalboard_cls, pitch_shift_cls = _get_pedalboard_pitch_shift()
@@ -400,6 +426,9 @@ class OmniVoiceService:
         pitch_shift: Optional[float],
         num_step: Optional[int],
         guidance_scale: Optional[float],
+        join_silence_ms: Optional[int],
+        trailing_silence_ms: Optional[int],
+        max_segment_chars: Optional[int],
     ) -> Dict[str, Any]:
         preset = get_voice_preset(voice_preset) if voice_preset else None
         if voice_preset and not preset:
@@ -424,6 +453,9 @@ class OmniVoiceService:
             "pitch_shift": pitch_shift,
             "num_step": num_step,
             "guidance_scale": guidance_scale,
+            "join_silence_ms": join_silence_ms,
+            "trailing_silence_ms": trailing_silence_ms,
+            "max_segment_chars": max_segment_chars,
         }
 
         if preset:
@@ -483,6 +515,9 @@ class OmniVoiceService:
         pitch_shift: Optional[float] = None,
         num_step: Optional[int] = None,
         guidance_scale: Optional[float] = None,
+        join_silence_ms: Optional[int] = None,
+        trailing_silence_ms: Optional[int] = None,
+        max_segment_chars: Optional[int] = None,
         output_filename: Optional[str] = None,
         return_base64: bool = False,
         save_output: bool = True,
@@ -502,6 +537,7 @@ class OmniVoiceService:
         work_dir: Optional[str] = None,
     ) -> Dict[str, Any]:
         language = canonical_lang(language)
+        guidance_scale = _validate_guidance_scale(guidance_scale)
         preset_resolution = self._resolve_preset_reference(
             voice_preset=voice_preset,
             language=language,
@@ -515,6 +551,9 @@ class OmniVoiceService:
             pitch_shift=pitch_shift,
             num_step=num_step,
             guidance_scale=guidance_scale,
+            join_silence_ms=join_silence_ms,
+            trailing_silence_ms=trailing_silence_ms,
+            max_segment_chars=max_segment_chars,
         )
         reference_audio_path = preset_resolution["reference_audio_path"]
         ref_text = preset_resolution["ref_text"]
@@ -531,6 +570,7 @@ class OmniVoiceService:
             manual_overrides,
             base_overrides=preset_default_config,
         )
+        cfg["guidance_scale"] = _validate_guidance_scale(cfg.get("guidance_scale"))
         cfg = clamp_prosody(language, cfg)
         effective_gain_db = safe_gain_for_style(language, emotion, ad_emphasis, enabled=ad_safe)
         work_dir = work_dir or tempfile.mkdtemp(prefix="omnivoice-job-")
@@ -558,6 +598,9 @@ class OmniVoiceService:
 
         cleaned_ref_text = build_ref_text(ref_text, normalized_text, language)
         reference_quality = reference_quality_note(language, cleaned_ref_text)
+        actual_mode = infer_mode(str(source_ref) if source_ref else None, custom_instruct, mode)
+        if canonical_lang(language) == "en" and actual_mode == "clone":
+            preprocess_reference = False
         if source_ref and preprocess_reference:
             preprocessed_ref = Path(work_dir) / "reference_preprocessed.wav"
             reference_stats = preprocess_reference_audio(
@@ -581,7 +624,7 @@ class OmniVoiceService:
         elif source_ref:
             reference_meta["preprocessed_path"] = str(source_ref)
 
-        actual_mode = infer_mode(str(source_ref) if source_ref else None, custom_instruct, mode)
+        cfg = _apply_english_notebook_defaults(language, actual_mode, cfg)
         voice_clone_prompt = None
         if actual_mode == "clone":
             if source_ref is None:
@@ -597,7 +640,7 @@ class OmniVoiceService:
             normalized_text,
             int(cfg["join_silence_ms"]),
             int(cfg["max_segment_chars"]) if cfg.get("max_segment_chars") else None,
-            20 if canonical_lang(language) == "my" else None,
+            20 if canonical_lang(language) == "my" else 18 if canonical_lang(language) == "en" else None,
             language,
         )
         if not chunk_infos:
@@ -605,7 +648,7 @@ class OmniVoiceService:
 
         rendered_parts = []
         for chunk_info in chunk_infos:
-            prepared_text = add_config_text_omni(chunk_info["text"])
+            prepared_text = add_config_text_omni(chunk_info["text"], language)
             gen_kwargs: Dict[str, Any] = {
                 "text": prepared_text,
                 "language": language,
@@ -635,10 +678,11 @@ class OmniVoiceService:
                 out = model.generate(**gen_kwargs)
 
             piece = np.asarray(out[0], dtype=np.float32).flatten()
+            pause_floor = 0 if canonical_lang(language) == "vi" else int(cfg.get("min_join_silence_ms", 45))
             rendered_parts.append(
                 {
                     "audio": piece,
-                    "pause_ms": max(int(cfg.get("min_join_silence_ms", 45)), int(chunk_info["pause_ms"])),
+                    "pause_ms": max(pause_floor, int(chunk_info["pause_ms"])),
                 }
             )
 
@@ -651,7 +695,7 @@ class OmniVoiceService:
 
         combined = np.concatenate(assembled_parts, axis=0).astype(np.float32, copy=False)
 
-        combined = self._apply_pitch_shift(combined, float(cfg["pitch_shift"]))
+        combined = self._apply_pitch_shift(combined, float(cfg["pitch_shift"]), language)
         trailing = np.zeros(int(self.sampling_rate * float(cfg["trailing_silence_ms"]) / 1000.0), dtype=np.float32)
         combined = np.concatenate([combined, trailing]).astype(np.float32)
 

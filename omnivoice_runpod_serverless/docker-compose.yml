@@ -12,7 +12,7 @@ services:
       OMNIVOICE_VIEWER_USER: ${OMNIVOICE_VIEWER_USER}
       OMNIVOICE_VIEWER_PASSWORD: ${OMNIVOICE_VIEWER_PASSWORD}
     ports:
-      - "5432:5432"
+      - "5433:5433"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
@@ -35,7 +35,7 @@ services:
       - .env
       - web/.env.runpod-web
     environment:
-      - DATABASE_URL=postgresql+psycopg://${OMNIVOICE_ADMIN_USER}:${OMNIVOICE_ADMIN_PASSWORD}@db:${POSTGRES_PORT:-5432}/${POSTGRES_DB}
+      - DATABASE_URL=postgresql+psycopg://${OMNIVOICE_ADMIN_USER}:${OMNIVOICE_ADMIN_PASSWORD}@db:${POSTGRES_PORT:-5433}/${POSTGRES_DB}
     ports:
       - "${WEB_PORT:-7860}:7860"
     volumes:

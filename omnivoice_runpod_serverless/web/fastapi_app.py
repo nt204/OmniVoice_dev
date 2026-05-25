@@ -43,6 +43,7 @@ VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
 
 DEFAULT_TEXTS: Dict[str, str] = {
+    "en": "Starting today, keep your daily routine simple, clear, and consistent. Small steps can help you stay active, comfortable, and confident throughout the day.",
     "vi": "Khám phá giải pháp đột phá giúp nâng tầm cuộc sống của bạn ngay hôm nay. Sản phẩm chất lượng vượt trội, thiết kế tinh tế cùng ưu đãi hấp dẫn đang chờ đón bạn sở hữu.",
     "lo": "ພວກເຮົາເຊື່ອວ່າອາຫານທີ່ແຊບແມ່ນຄວາມສຸກຂອງຄອບຄົວ.",
     "km": "សូមជម្រាបសួរ! តើអ្នកកំពុងស្វែងរកផលិតផលដែលល្អបំផុតមែនទេ? មកកាន់យើងឥឡូវនេះ ដើម្បីទទួលបានការបញ្ចុះតម្លៃពិសេស និងគុណភាពដែលអ្នកទុកចិត្តបាន!",
@@ -429,6 +430,27 @@ def _voice_status(lang: str, voice_preset: Optional[str]) -> Dict[str, Any]:
     }
 
 
+def _manual_control_defaults(
+    lang: str,
+    base_overrides: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    cfg = get_effective_config(
+        lang,
+        "Mặc định",
+        "Không bổ trợ",
+        base_overrides=base_overrides,
+    )
+    return {
+        "speed": float(cfg.get("speed", 1.0)),
+        "pitch_shift": float(cfg.get("pitch_shift", 1.0)),
+        "num_step": int(cfg.get("num_step", 32)),
+        "guidance_scale": float(cfg.get("guidance_scale", 3.9)),
+        "join_silence_ms": int(cfg.get("join_silence_ms", 120)),
+        "trailing_silence_ms": int(cfg.get("trailing_silence_ms", 250)),
+        "max_segment_chars": int(cfg["max_segment_chars"]) if cfg.get("max_segment_chars") else 0,
+    }
+
+
 def _state_for_lang(
     lang: str,
     voice_preset: Optional[str] = None,
@@ -437,21 +459,28 @@ def _state_for_lang(
     current_pitch: Optional[float] = None,
     current_num_step: Optional[float] = None,
     current_guidance_scale: Optional[float] = None,
+    current_join_silence_ms: Optional[int] = None,
+    current_trailing_silence_ms: Optional[int] = None,
+    current_max_segment_chars: Optional[int] = None,
 ) -> Dict[str, Any]:
     lang = canonical_lang(lang)
     voice_choices = _voice_choices(lang)
     voice_key = voice_preset or (voice_choices[0]["value"] if voice_choices else None)
     voice_status = _voice_status(lang, voice_key)
+    manual_defaults = _manual_control_defaults(lang, voice_status.get("default_config"))
     emotions = list(get_emotion_presets_for_lang(lang).keys())
     ads = list(get_ad_presets_for_lang(lang).keys())
     emotion_key = emotions[0]
     ad_key = ads[0]
     if control_mode == "custom":
         cfg = {
-            "speed": current_speed or 1.0,
-            "pitch_shift": current_pitch or 1.0,
-            "num_step": current_num_step or 52,
-            "guidance_scale": current_guidance_scale or 3.9,
+            "speed": current_speed if current_speed is not None else manual_defaults["speed"],
+            "pitch_shift": current_pitch if current_pitch is not None else manual_defaults["pitch_shift"],
+            "num_step": current_num_step if current_num_step is not None else manual_defaults["num_step"],
+            "guidance_scale": current_guidance_scale if current_guidance_scale is not None else manual_defaults["guidance_scale"],
+            "join_silence_ms": current_join_silence_ms if current_join_silence_ms is not None else manual_defaults["join_silence_ms"],
+            "trailing_silence_ms": current_trailing_silence_ms if current_trailing_silence_ms is not None else manual_defaults["trailing_silence_ms"],
+            "max_segment_chars": current_max_segment_chars if current_max_segment_chars is not None else manual_defaults["max_segment_chars"],
         }
     else:
         cfg = get_effective_config(
@@ -474,6 +503,9 @@ def _state_for_lang(
             "pitch_shift": float(cfg.get("pitch_shift", 1.0)),
             "num_step": int(cfg.get("num_step", 52)),
             "guidance_scale": float(cfg.get("guidance_scale", 3.9)),
+            "join_silence_ms": int(cfg.get("join_silence_ms", 120)),
+            "trailing_silence_ms": int(cfg.get("trailing_silence_ms", 250)),
+            "max_segment_chars": int(cfg["max_segment_chars"]) if cfg.get("max_segment_chars") else 0,
         },
     }
 
@@ -488,16 +520,23 @@ def _prosody_state(
     current_pitch: Optional[float] = None,
     current_num_step: Optional[float] = None,
     current_guidance_scale: Optional[float] = None,
+    current_join_silence_ms: Optional[int] = None,
+    current_trailing_silence_ms: Optional[int] = None,
+    current_max_segment_chars: Optional[int] = None,
 ) -> Dict[str, Any]:
     lang = canonical_lang(lang)
     _, preset = _resolve_voice_preset_for_lang(lang, voice_preset)
     base_overrides = dict(preset.get("default_config") or {}) if preset else {}
+    manual_defaults = _manual_control_defaults(lang, base_overrides)
     if control_mode == "custom":
         cfg = {
-            "speed": current_speed or 1.0,
-            "pitch_shift": current_pitch or 1.0,
-            "num_step": current_num_step or 52,
-            "guidance_scale": current_guidance_scale or 3.9,
+            "speed": current_speed if current_speed is not None else manual_defaults["speed"],
+            "pitch_shift": current_pitch if current_pitch is not None else manual_defaults["pitch_shift"],
+            "num_step": current_num_step if current_num_step is not None else manual_defaults["num_step"],
+            "guidance_scale": current_guidance_scale if current_guidance_scale is not None else manual_defaults["guidance_scale"],
+            "join_silence_ms": current_join_silence_ms if current_join_silence_ms is not None else manual_defaults["join_silence_ms"],
+            "trailing_silence_ms": current_trailing_silence_ms if current_trailing_silence_ms is not None else manual_defaults["trailing_silence_ms"],
+            "max_segment_chars": current_max_segment_chars if current_max_segment_chars is not None else manual_defaults["max_segment_chars"],
         }
     else:
         cfg = get_effective_config(lang, emotion, ad_emphasis, base_overrides=base_overrides)
@@ -507,6 +546,9 @@ def _prosody_state(
             "pitch_shift": float(cfg.get("pitch_shift", 1.0)),
             "num_step": int(cfg.get("num_step", 52)),
             "guidance_scale": float(cfg.get("guidance_scale", 3.9)),
+            "join_silence_ms": int(cfg.get("join_silence_ms", 120)),
+            "trailing_silence_ms": int(cfg.get("trailing_silence_ms", 250)),
+            "max_segment_chars": int(cfg["max_segment_chars"]) if cfg.get("max_segment_chars") else 0,
         }
     }
 
@@ -626,6 +668,15 @@ def list_jobs(
                 "language": job.language,
                 "mode": job.mode,
                 "voice_preset": job.voice_preset,
+                "emotion": job.emotion,
+                "ad_emphasis": job.ad_emphasis,
+                "speed": _maybe_float_value(job.speed),
+                "pitch_shift": _maybe_float_value(job.pitch_shift),
+                "num_step": job.num_step,
+                "guidance_scale": _maybe_float_value(job.guidance_scale),
+                "join_silence_ms": job.join_silence_ms,
+                "trailing_silence_ms": job.trailing_silence_ms,
+                "max_segment_chars": job.max_segment_chars,
                 "status": job.status,
                 "output_audio_url": job.output_audio_url,
                 "created_at": _to_vn_iso(job.created_at),
@@ -1144,8 +1195,7 @@ def index() -> HTMLResponse:
                                   <div class="range-card">
                                     <div class="range-head"><span>Speed</span><strong id="speed_value">1.00</strong></div>
                                     <div class="range-meta">
-                                      <input id="speed" class="form-range" type="range" min="0.5" max="2.0" step="0.01" value="1.0">
-                                      <input id="speed_input" class="form-control range-spin" type="number" min="0.5" max="2.0" step="0.01" value="1.0">
+                                      <input id="speed" class="form-control" type="number" step="0.01" value="1.0">
                                     </div>
                                   </div>
                                 </div>
@@ -1153,8 +1203,7 @@ def index() -> HTMLResponse:
                                   <div class="range-card">
                                     <div class="range-head"><span>Pitch</span><strong id="pitch_shift_value">1.00</strong></div>
                                     <div class="range-meta">
-                                      <input id="pitch_shift" class="form-range" type="range" min="0.5" max="2.0" step="0.01" value="1.0">
-                                      <input id="pitch_shift_input" class="form-control range-spin" type="number" min="0.5" max="2.0" step="0.01" value="1.0">
+                                      <input id="pitch_shift" class="form-control" type="number" step="0.01" value="1.0">
                                     </div>
                                   </div>
                                 </div>
@@ -1162,17 +1211,41 @@ def index() -> HTMLResponse:
                                   <div class="range-card">
                                     <div class="range-head"><span>Num step</span><strong id="num_step_value">32</strong></div>
                                     <div class="range-meta">
-                                      <input id="num_step" class="form-range" type="range" min="24" max="96" step="1" value="32">
-                                      <input id="num_step_input" class="form-control range-spin" type="number" min="24" max="96" step="1" value="32">
+                                      <input id="num_step" class="form-range" type="range" min="24" max="48" step="1" value="32">
+                                      <input id="num_step_input" class="form-control" type="number" min="24" max="48" step="1" value="32">
                                     </div>
                                   </div>
                                 </div>
                                 <div class="col-12 col-md-6">
                                   <div class="range-card">
-                                    <div class="range-head"><span>Guidance</span><strong id="guidance_scale_value">3.90</strong></div>
+                                    <div class="range-head"><span>Guidance</span><strong id="guidance_scale_value">2.50</strong></div>
                                     <div class="range-meta">
-                                      <input id="guidance_scale" class="form-range" type="range" min="2.0" max="5.5" step="0.1" value="3.9">
-                                      <input id="guidance_scale_input" class="form-control range-spin" type="number" min="2.0" max="5.5" step="0.1" value="3.9">
+                                      <input id="guidance_scale" class="form-range" type="range" min="1" max="5" step="0.1" value="2.5">
+                                      <input id="guidance_scale_input" class="form-control" type="number" min="1" max="5" step="0.1" value="2.5">
+                                    </div>
+                                  </div>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                  <div class="range-card">
+                                    <div class="range-head"><span>Join silence</span><strong id="join_silence_ms_value">120</strong></div>
+                                    <div class="range-meta">
+                                      <input id="join_silence_ms" class="form-control" type="number" step="1" value="120">
+                                    </div>
+                                  </div>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                  <div class="range-card">
+                                    <div class="range-head"><span>Trailing silence</span><strong id="trailing_silence_ms_value">250</strong></div>
+                                    <div class="range-meta">
+                                      <input id="trailing_silence_ms" class="form-control" type="number" step="1" value="250">
+                                    </div>
+                                  </div>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                  <div class="range-card">
+                                    <div class="range-head"><span>Max segment chars</span><strong id="max_segment_chars_value">0</strong></div>
+                                    <div class="range-meta">
+                                      <input id="max_segment_chars" class="form-control" type="number" step="1" value="0">
                                     </div>
                                   </div>
                                 </div>
@@ -1250,7 +1323,7 @@ def index() -> HTMLResponse:
   <script>
     const ids = [
       "lang", "voice_preset", "emotion", "ad_emphasis", "control_mode", "text", "ref_text",
-      "speed", "pitch_shift", "num_step", "guidance_scale",
+      "speed", "pitch_shift", "num_step", "guidance_scale", "join_silence_ms", "trailing_silence_ms", "max_segment_chars",
       "preset_status", "preset_preview", "input_preview", "audio_out", "message"
     ];
     const el = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
@@ -1309,14 +1382,16 @@ def index() -> HTMLResponse:
     function setSliderValue(id) {{
       const target = document.getElementById(`${{id}}_value`);
       const raw = el[id].value;
-      target.textContent = id === "num_step" ? raw : Number(raw).toFixed(2);
+      const integerIds = new Set(["num_step", "join_silence_ms", "trailing_silence_ms", "max_segment_chars"]);
+      target.textContent = integerIds.has(id) ? raw : Number(raw).toFixed(2);
       const spin = document.getElementById(`${{id}}_input`);
       if (spin && spin.value !== raw) {{
         spin.value = raw;
       }}
     }}
 
-    ["speed", "pitch_shift", "num_step", "guidance_scale"].forEach((id) => {{
+    const controlIds = ["speed", "pitch_shift", "num_step", "guidance_scale", "join_silence_ms", "trailing_silence_ms", "max_segment_chars"];
+    controlIds.forEach((id) => {{
       el[id].addEventListener("input", () => setSliderValue(id));
       const spin = document.getElementById(`${{id}}_input`);
       if (spin) {{
@@ -1329,7 +1404,7 @@ def index() -> HTMLResponse:
           const min = Number(spin.min);
           const max = Number(spin.max);
           if (Number.isFinite(min)) value = Math.max(min, value);
-          if (Number.isFinite(max)) value = Math.min(max, value);
+          if (Number.isFinite(max) && spin.hasAttribute("max")) value = Math.min(max, value);
           el[id].value = String(value);
           spin.value = el[id].value;
           setSliderValue(id);
@@ -1445,6 +1520,9 @@ def index() -> HTMLResponse:
         pitch_shift: el.pitch_shift.value,
         num_step: el.num_step.value,
         guidance_scale: el.guidance_scale.value,
+        join_silence_ms: el.join_silence_ms.value,
+        trailing_silence_ms: el.trailing_silence_ms.value,
+        max_segment_chars: el.max_segment_chars.value,
       }});
       const res = await fetch(`/api/state?${{params.toString()}}`);
       const data = await res.json();
@@ -1461,7 +1539,10 @@ def index() -> HTMLResponse:
       el.pitch_shift.value = data.config.pitch_shift;
       el.num_step.value = data.config.num_step;
       el.guidance_scale.value = data.config.guidance_scale;
-      ["speed", "pitch_shift", "num_step", "guidance_scale"].forEach(setSliderValue);
+      el.join_silence_ms.value = data.config.join_silence_ms;
+      el.trailing_silence_ms.value = data.config.trailing_silence_ms;
+      el.max_segment_chars.value = data.config.max_segment_chars;
+      controlIds.forEach(setSliderValue);
       downloadAudio.href = "#";
       downloadAudio.setAttribute("aria-disabled", "true");
       updateModeHint();
@@ -1493,6 +1574,9 @@ def index() -> HTMLResponse:
         pitch_shift: el.pitch_shift.value,
         num_step: el.num_step.value,
         guidance_scale: el.guidance_scale.value,
+        join_silence_ms: el.join_silence_ms.value,
+        trailing_silence_ms: el.trailing_silence_ms.value,
+        max_segment_chars: el.max_segment_chars.value,
       }});
       const res = await fetch(`/api/prosody?${{params.toString()}}`);
       const data = await res.json();
@@ -1500,7 +1584,10 @@ def index() -> HTMLResponse:
       el.pitch_shift.value = data.config.pitch_shift;
       el.num_step.value = data.config.num_step;
       el.guidance_scale.value = data.config.guidance_scale;
-      ["speed", "pitch_shift", "num_step", "guidance_scale"].forEach(setSliderValue);
+      el.join_silence_ms.value = data.config.join_silence_ms;
+      el.trailing_silence_ms.value = data.config.trailing_silence_ms;
+      el.max_segment_chars.value = data.config.max_segment_chars;
+      controlIds.forEach(setSliderValue);
     }}
 
     el.lang.addEventListener("change", () => loadState(el.lang.value));
@@ -1536,6 +1623,9 @@ def index() -> HTMLResponse:
       form.append("pitch_shift", el.pitch_shift.value);
       form.append("num_step", el.num_step.value);
       form.append("guidance_scale", el.guidance_scale.value);
+      form.append("join_silence_ms", el.join_silence_ms.value);
+      form.append("trailing_silence_ms", el.trailing_silence_ms.value);
+      form.append("max_segment_chars", el.max_segment_chars.value);
       form.append("save_output", "true");
       
       const upload = referenceAudioInput.files[0];
@@ -1663,6 +1753,15 @@ def index() -> HTMLResponse:
     window.loadJobToUI = (job, announce = true) => {{
       el.lang.value = job.language;
       el.text.value = job.text;
+      if (job.voice_preset) el.voice_preset.value = job.voice_preset;
+      if (job.emotion) el.emotion.value = job.emotion;
+      if (job.ad_emphasis) el.ad_emphasis.value = job.ad_emphasis;
+      for (const id of controlIds) {{
+        if (job[id] !== undefined && job[id] !== null) {{
+          el[id].value = job[id];
+          setSliderValue(id);
+        }}
+      }}
       if (job.output_audio_url) {{
         setOutputAudio(job.output_audio_url);
         if (announce) setMessage("Đã nạp audio từ lịch sử gần đây.", "neutral");
@@ -1765,8 +1864,22 @@ def state(
     pitch_shift: Optional[float] = None,
     num_step: Optional[float] = None,
     guidance_scale: Optional[float] = None,
+    join_silence_ms: Optional[int] = None,
+    trailing_silence_ms: Optional[int] = None,
+    max_segment_chars: Optional[int] = None,
 ) -> Dict[str, Any]:
-    return _state_for_lang(lang, voice_preset, control_mode, speed, pitch_shift, num_step, guidance_scale)
+    return _state_for_lang(
+        lang,
+        voice_preset,
+        control_mode,
+        speed,
+        pitch_shift,
+        num_step,
+        guidance_scale,
+        join_silence_ms,
+        trailing_silence_ms,
+        max_segment_chars,
+    )
 
 
 @app.get("/api/preset-status")
@@ -1785,6 +1898,9 @@ def prosody(
     pitch_shift: Optional[float] = None,
     num_step: Optional[float] = None,
     guidance_scale: Optional[float] = None,
+    join_silence_ms: Optional[int] = None,
+    trailing_silence_ms: Optional[int] = None,
+    max_segment_chars: Optional[int] = None,
 ) -> Dict[str, Any]:
     return _prosody_state(
         lang=lang,
@@ -1796,6 +1912,9 @@ def prosody(
         current_pitch=pitch_shift,
         current_num_step=num_step,
         current_guidance_scale=guidance_scale,
+        current_join_silence_ms=join_silence_ms,
+        current_trailing_silence_ms=trailing_silence_ms,
+        current_max_segment_chars=max_segment_chars,
     )
 
 
@@ -1822,7 +1941,10 @@ async def synthesize(
     speed: float = Form(1.0),
     pitch_shift: float = Form(1.0),
     num_step: int = Form(32),
-    guidance_scale: float = Form(3.9),
+    guidance_scale: float = Form(3.9, ge=1.0, le=5.0),
+    join_silence_ms: int = Form(120),
+    trailing_silence_ms: int = Form(250),
+    max_segment_chars: int = Form(0),
     debug: bool = Form(False),
     save_output: bool = Form(True),
     reference_audio: Optional[UploadFile] = File(None),
@@ -1849,6 +1971,7 @@ async def synthesize(
                 request_voice_preset = None
 
         mode = _resolve_mode(language=language, voice_preset=request_voice_preset, reference_audio_path=reference_audio_path)
+        requested_max_segment_chars = int(max_segment_chars) if int(max_segment_chars) > 0 else None
         # Only preprocess if it's a real upload to save time on presets
         should_preprocess_reference = bool(reference_audio_path is not None)
         reference_preprocess_options = {
@@ -1888,6 +2011,9 @@ async def synthesize(
                 "pitch_shift": float(pitch_shift),
                 "num_step": int(num_step),
                 "guidance_scale": float(guidance_scale),
+                "join_silence_ms": int(join_silence_ms),
+                "trailing_silence_ms": int(trailing_silence_ms),
+                "max_segment_chars": requested_max_segment_chars,
                 "return_base64": True,  # Always get base64 back to save locally
                 "save_output": False,
                 "debug": bool(debug),
@@ -2001,6 +2127,9 @@ async def synthesize(
                     pitch_shift=float(pitch_shift),
                     num_step=int(num_step),
                     guidance_scale=float(guidance_scale),
+                    join_silence_ms=int(join_silence_ms),
+                    trailing_silence_ms=int(trailing_silence_ms),
+                    max_segment_chars=requested_max_segment_chars,
                     return_base64=local_return_base64,
                     save_output=bool(save_output),
                     debug=bool(debug),
@@ -2041,6 +2170,9 @@ async def synthesize(
                         "pitch_shift": pitch_shift,
                         "num_step": num_step,
                         "guidance_scale": guidance_scale,
+                        "join_silence_ms": join_silence_ms,
+                        "trailing_silence_ms": trailing_silence_ms,
+                        "max_segment_chars": requested_max_segment_chars,
                     },
                     base_overrides=dict(resolved_preset.get("default_config") or {}) if resolved_preset else None,
                 )

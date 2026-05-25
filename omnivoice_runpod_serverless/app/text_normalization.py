@@ -6,8 +6,19 @@ from typing import Any, Dict, List, Optional
 
 from .presets import canonical_lang
 
-def add_config_text_omni(text: str) -> str:
-    return f" . {text.strip()} . "
+_URL_TOKEN_PREFIX = "__VI_URL_"
+_EMAIL_TOKEN_PREFIX = "__VI_EMAIL_"
+_EN_LITERAL_PREFIX = "__EN_LITERAL_"
+_EN_ABBREV_DOT = "__EN_ABBR_DOT__"
+_EN_DECIMAL_DOT = "__EN_DECIMAL_DOT__"
+
+def add_config_text_omni(text: str, lang: Optional[str] = None) -> str:
+    cleaned = text.strip()
+    if canonical_lang(lang) == "en":
+        return cleaned
+    if canonical_lang(lang) == "vi":
+        return cleaned
+    return f" . {cleaned} . "
 
 
 def _replace_common_symbols(text: str) -> str:
@@ -61,6 +72,62 @@ def _restore_numeric_punctuation(text: str) -> str:
     )
 
 
+def _protect_vi_inline_literals(text: str) -> tuple[str, Dict[str, str]]:
+    replacements: Dict[str, str] = {}
+
+    def _stash(prefix: str, value: str) -> str:
+        key = f"{prefix}{len(replacements)}__"
+        replacements[key] = value
+        return key
+
+    text = re.sub(
+        r"https?://[^\s]+",
+        lambda match: _stash(_URL_TOKEN_PREFIX, match.group(0)),
+        text,
+    )
+    text = re.sub(
+        r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
+        lambda match: _stash(_EMAIL_TOKEN_PREFIX, match.group(0)),
+        text,
+    )
+    return text, replacements
+
+
+def _restore_vi_inline_literals(text: str, replacements: Dict[str, str]) -> str:
+    restored = text
+    for key, value in replacements.items():
+        restored = restored.replace(key, value)
+    return restored
+
+
+def _protect_en_inline_literals(text: str) -> tuple[str, Dict[str, str]]:
+    replacements: Dict[str, str] = {}
+
+    def _stash(value: str) -> str:
+        key = f"{_EN_LITERAL_PREFIX}{len(replacements)}__"
+        replacements[key] = value
+        return key
+
+    text = re.sub(
+        r"https?://[^\s]+",
+        lambda match: _stash(match.group(0)),
+        text,
+    )
+    text = re.sub(
+        r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
+        lambda match: _stash(match.group(0)),
+        text,
+    )
+    return text, replacements
+
+
+def _restore_en_inline_literals(text: str, replacements: Dict[str, str]) -> str:
+    restored = text
+    for key, value in replacements.items():
+        restored = restored.replace(key, value)
+    return restored
+
+
 def _basic_text_cleanup(text: str) -> str:
     text = unicodedata.normalize("NFC", str(text or ""))
     text = _replace_common_symbols(text)
@@ -96,16 +163,21 @@ def _trim_punctuation_spacing(text: str, punctuation: str, protect_numeric: bool
 
 
 def normalize_vietnamese_tts_text(text: str) -> str:
+    text, protected_literals = _protect_vi_inline_literals(text)
     text = re.sub(r"(\d+)\s*%", r"\1 phần trăm", text)
     text = re.sub(r"(\d+)\s*(?:°c|ºc)", r"\1 độ C", text, flags=re.IGNORECASE)
     text = re.sub(r"(\d+)\s*(?:km/h|kmh)", r"\1 ki lô mét trên giờ", text, flags=re.IGNORECASE)
-    text = re.sub(r"(\d+)\s*(?:vnd|đ|₫)", r"\1 đồng", text, flags=re.IGNORECASE)
+    text = re.sub(r"(\d+(?:[.,]\d+)*)\s*(?:vnd|₫)\b", r"\1 đồng", text, flags=re.IGNORECASE)
+    text = re.sub(r"(\d+(?:[.,]\d+)*)\s*đ(?=\s|$|[,.!?;:])", r"\1 đồng", text)
     text = re.sub(r"\bTP\.\s*HCM\b", "Thành phố Hồ Chí Minh", text, flags=re.IGNORECASE)
     text = re.sub(r"\bQ\.\s*(\d+)\b", r"quận \1", text, flags=re.IGNORECASE)
+    text = re.sub(r":\s*\.\s*-\s*", ": ", text)
+    text = re.sub(r"\.\s*-\s*", ". ", text)
     text = _normalize_number_separators(text)
     text = re.sub(r"(?<=\w)\s*-\s*(?=\w)", "-", text)
     text = _collapse_punctuation_runs(text, ",.;:!?")
-    return _trim_punctuation_spacing(text, ",.;:!?", protect_numeric=True)
+    text = _trim_punctuation_spacing(text, ",.;:!?", protect_numeric=True)
+    return _restore_vi_inline_literals(text, protected_literals)
 
 def normalize_myanmar_tts_text(text: str) -> str:
     text = _normalize_number_separators(text)
@@ -122,6 +194,7 @@ def normalize_khmer_tts_text(text: str) -> str:
     text = _collapse_punctuation_runs(text, "។៕,;:")
     return _trim_punctuation_spacing(text, "។៕,;:/", protect_numeric=True)
 
+
 def preprocess_text_for_tts(text: str, lang: str, is_reference: bool = False) -> str:
     lang = canonical_lang(lang)
     text = _basic_text_cleanup(text)
@@ -132,10 +205,12 @@ def preprocess_text_for_tts(text: str, lang: str, is_reference: bool = False) ->
         return text
 
     text = text.replace("…", ".")
-    text = _collapse_punctuation_runs(text, ",.;:!?/|")
 
+    if lang == "en":
+        return text
     if lang == "vi":
         return normalize_vietnamese_tts_text(text)
+    text = _collapse_punctuation_runs(text, ",.;:!?/|")
     if lang == "my":
         return normalize_myanmar_tts_text(text)
     if lang == "km":
@@ -145,9 +220,29 @@ def preprocess_text_for_tts(text: str, lang: str, is_reference: bool = False) ->
 
     return text
 
-def clean_and_segment_text(text: str) -> List[str]:
+def clean_and_segment_text(text: str, lang: Optional[str] = None) -> List[str]:
+    lang = canonical_lang(lang)
     text = _protect_numeric_punctuation(re.sub(r"\s+", " ", str(text or "")).strip())
-    punct_pattern = r"(\.\.+|…+|[.!?,;:/—–\-，。？！、；៖၊။៕])"
+    if lang == "en":
+        abbreviations = (
+            "mr", "mrs", "ms", "dr", "prof", "sr", "jr", "st", "mt",
+            "no", "fig", "dept", "inc", "ltd", "co", "corp", "u.s", "u.k",
+        )
+        for abbreviation in abbreviations:
+            pattern = rf"\b{re.escape(abbreviation)}\."
+            text = re.sub(
+                pattern,
+                lambda match: match.group(0).replace(".", _EN_ABBREV_DOT),
+                text,
+                flags=re.IGNORECASE,
+            )
+        text = re.sub(r"(?<=\b[A-Z])\.(?=[A-Z]\b)", _EN_ABBREV_DOT, text)
+        text = re.sub(r"(?<=\d)\.(?=\d)", _EN_DECIMAL_DOT, text)
+
+    if lang == "vi":
+        punct_pattern = r"(\.\.+|…+|[.!?。？！])"
+    else:
+        punct_pattern = r"(\.\.+|…+|[.!?,;:/—–\-，。？！、；៖၊။៕])"
     parts = re.split(punct_pattern, text)
     segments: List[str] = []
     current_text = ""
@@ -162,16 +257,27 @@ def clean_and_segment_text(text: str) -> List[str]:
             current_text += part
     if current_text.strip():
         segments.append(current_text.strip())
-    return [_restore_numeric_punctuation(seg) for seg in segments if seg.strip()]
+    restored_segments = [_restore_numeric_punctuation(seg) for seg in segments if seg.strip()]
+    if lang == "en":
+        restored_segments = [
+            seg.replace(_EN_ABBREV_DOT, ".").replace(_EN_DECIMAL_DOT, ".")
+            for seg in restored_segments
+        ]
+    return restored_segments
 
-def _split_segment_to_max_chars(segment: str, max_chars: Optional[int]) -> List[str]:
+def _split_segment_to_max_chars(segment: str, max_chars: Optional[int], lang: Optional[str] = None) -> List[str]:
     segment = _protect_numeric_punctuation((segment or "").strip())
     if not segment:
         return []
     if not max_chars or len(segment) <= max_chars:
         return [_restore_numeric_punctuation(segment)]
 
+    language = canonical_lang(lang)
     sep_pattern = r"([,;:，、；៖၊。។៕])"
+    if language == "en":
+        sep_pattern = r"([,;:])"
+    elif language == "vi":
+        sep_pattern = r"([,;，、；])"
     tokens = re.split(sep_pattern, segment)
     parts: List[str] = []
     current = ""
@@ -275,6 +381,12 @@ def segment_text_with_pauses(
     min_chars: Optional[int] = None,
     lang: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
+    language = canonical_lang(lang)
+    normalized_text = re.sub(r"\s+", " ", str(text or "")).strip()
+    if language == "vi" and normalized_text:
+        if not max_chars or len(normalized_text) <= max_chars:
+            return [{"text": normalized_text, "pause_ms": 0}]
+
     pause_scale = {
         ",": 0.75,
         ";": 0.95,
@@ -291,18 +403,29 @@ def segment_text_with_pauses(
         "；": 0.95,
         "៖": 1.0,
     }
-    if canonical_lang(lang) == "my":
+    if language == "my":
         pause_scale["၊"] = 0.66
         pause_scale["။"] = 1.00
-    segments = clean_and_segment_text(text)
+    segments = clean_and_segment_text(text, language)
     result: List[Dict[str, Any]] = []
     base_pause = max(40, int(join_silence_ms))
+    if language == "vi":
+        pause_scale.update({
+            ",": 0.0,
+            ";": 0.0,
+            ":": 0.0,
+            ".": 0.05,
+            "!": 0.05,
+            "?": 0.05,
+            "…": 0.05,
+        })
     for segment in segments:
-        split_segments = _split_segment_to_max_chars(segment, max_chars)
+        split_segments = _split_segment_to_max_chars(segment, max_chars, language)
         for idx, piece in enumerate(split_segments):
             ending = piece[-1] if piece else ""
             pause_ms = int(base_pause * pause_scale.get(ending, 0.9 if idx < len(split_segments) - 1 else 1.0))
-            result.append({"text": piece, "pause_ms": pause_ms})
+            if piece:
+                result.append({"text": piece, "pause_ms": pause_ms})
     result = _merge_short_chunks(result, max_chars=max_chars, min_chars=min_chars)
     if not result and text.strip():
         result.append({"text": text.strip(), "pause_ms": base_pause})
@@ -326,6 +449,12 @@ def reference_quality_note(lang: str, ref_text: Optional[str]) -> str:
         if size > 180:
             return "ref_text_too_long_my"
         return "ok_my"
+    if lang == "en":
+        if size < 20:
+            return "ref_text_too_short_en"
+        if size > 240:
+            return "ref_text_too_long_en"
+        return "ok_en"
     return "unchecked"
 
 
