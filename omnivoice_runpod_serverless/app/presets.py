@@ -781,6 +781,7 @@ VOICE_DEFINITIONS: Dict[str, List[Dict[str, Any]]] = {
         {"preset_key": "my_2", "label": "female_rank_2", "folder": "myanmar_prompt_voice", "audio_file": "female_rank_2.wav", "style_tags": ["female", "gentle"], "aliases": ["female_rank_2", "2_myanmar_audio_prompt"]},
         {"preset_key": "my_3", "label": "male_rank_1", "folder": "myanmar_prompt_voice", "audio_file": "male_rank_1.wav", "style_tags": ["male", "energetic"], "aliases": ["male_rank_1", "3_myanmar_audio_prompt"]},
         {"preset_key": "my_4", "label": "male_rank_2", "folder": "myanmar_prompt_voice", "audio_file": "male_rank_2.wav", "style_tags": ["male", "balanced"], "aliases": ["male_rank_2", "4_myanmar_audio_prompt"]},
+        {"preset_key": "my_5", "label": "elder_female_02", "folder": "myanmar_prompt_voice", "audio_file": "elder_female_02.wav", "style_tags": ["female", "elder"], "aliases": ["elder_female_02"]},
     ],
 }
 
