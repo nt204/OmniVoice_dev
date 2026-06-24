@@ -1308,6 +1308,11 @@ def index() -> HTMLResponse:
                 <span class="badge text-bg-light border">Output</span>
               </div>
               <audio id="audio_out" controls></audio>
+              <div class="mt-3 d-flex align-items-center gap-2">
+                <i class="bi bi-volume-down text-secondary"></i>
+                <input type="range" id="audio_out_volume" class="form-range" min="0" max="5" step="0.05" value="1">
+                <i class="bi bi-volume-up text-secondary"></i>
+              </div>
             </div>
             <div class="audio-card p-3">
               <div class="d-flex align-items-center justify-content-between mb-2">
@@ -1331,6 +1336,29 @@ def index() -> HTMLResponse:
     ];
     const el = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
     const downloadAudio = document.getElementById("download_audio");
+    const audioOutVolume = document.getElementById("audio_out_volume");
+    let audioCtx = null;
+    let gainNode = null;
+    let sourceNode = null;
+
+    if (audioOutVolume) {{
+      audioOutVolume.addEventListener("input", function(e) {{
+        if (!el.audio_out) return;
+        const val = parseFloat(e.target.value);
+        if (!audioCtx) {{
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          audioCtx = new AudioContext();
+          gainNode = audioCtx.createGain();
+          sourceNode = audioCtx.createMediaElementSource(el.audio_out);
+          sourceNode.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+        }}
+        if (audioCtx.state === 'suspended') {{
+          audioCtx.resume();
+        }}
+        gainNode.gain.value = val;
+      }});
+    }}
     const referenceAudioInput = document.getElementById("reference_audio");
     const inputPreviewNote = document.getElementById("input_preview_note");
     const modeHint = document.getElementById("mode_hint");
@@ -1344,6 +1372,96 @@ def index() -> HTMLResponse:
     }});
     let recentJobs = [];
     let inputPreviewObjectUrl = null;
+
+    downloadAudio.addEventListener("click", async function(e) {{
+      const vol = audioOutVolume ? parseFloat(audioOutVolume.value) : 1.0;
+      if (vol === 1.0) return;
+
+      e.preventDefault();
+      const originalHref = downloadAudio.getAttribute("href");
+      if (!originalHref || originalHref === "#") return;
+
+      const btnIcon = downloadAudio.innerHTML;
+      downloadAudio.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="width: 1rem; height: 1rem;"></span>';
+      downloadAudio.style.pointerEvents = "none";
+
+      try {{
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const OfflineAudioContext = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+        
+        const response = await fetch(originalHref);
+        const arrayBuffer = await response.arrayBuffer();
+        const audioBuffer = await new AudioContext().decodeAudioData(arrayBuffer);
+        
+        const offlineCtx = new OfflineAudioContext(
+          audioBuffer.numberOfChannels,
+          audioBuffer.length,
+          audioBuffer.sampleRate
+        );
+        
+        const source = offlineCtx.createBufferSource();
+        source.buffer = audioBuffer;
+        
+        const offlineGain = offlineCtx.createGain();
+        offlineGain.gain.value = vol;
+        
+        source.connect(offlineGain);
+        offlineGain.connect(offlineCtx.destination);
+        source.start();
+        
+        const renderedBuffer = await offlineCtx.startRendering();
+        
+        const numOfChan = renderedBuffer.numberOfChannels;
+        const length = renderedBuffer.length * numOfChan * 2 + 44;
+        const buffer = new ArrayBuffer(length);
+        const view = new DataView(buffer);
+        let pos = 0;
+
+        function setUint16(data) {{ view.setUint16(pos, data, true); pos += 2; }}
+        function setUint32(data) {{ view.setUint32(pos, data, true); pos += 4; }}
+
+        setUint32(0x46464952);
+        setUint32(length - 8);
+        setUint32(0x45564157);
+        setUint32(0x20746d66);
+        setUint32(16);
+        setUint16(1);
+        setUint16(numOfChan);
+        setUint32(renderedBuffer.sampleRate);
+        setUint32(renderedBuffer.sampleRate * 2 * numOfChan);
+        setUint16(numOfChan * 2);
+        setUint16(16);
+        setUint32(0x61746164);
+        setUint32(length - pos - 4);
+
+        const channels = [];
+        for (let i = 0; i < numOfChan; i++) channels.push(renderedBuffer.getChannelData(i));
+        let offset = 0;
+        while(pos < length) {{
+          for(let i = 0; i < numOfChan; i++) {{
+            let sample = Math.max(-1, Math.min(1, channels[i][offset]));
+            sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0;
+            view.setInt16(pos, sample, true);
+            pos += 2;
+          }}
+          offset++;
+        }}
+
+        const blob = new Blob([buffer], {{type: "audio/wav"}});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = originalHref.split('/').pop().split('?')[0].replace(".wav", "_vol" + vol + ".wav");
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }} catch (err) {{
+        console.error("Error adjusting volume:", err);
+        alert("Có lỗi xảy ra khi xử lý âm thanh tải về.");
+      }} finally {{
+        downloadAudio.innerHTML = btnIcon;
+        downloadAudio.style.pointerEvents = "auto";
+      }}
+    }});
 
     function setMessage(text, tone = "info") {{
       const toneClass = {{
