@@ -49,3 +49,22 @@ Hệ thống sử dụng cơ chế **Approval-First**. Khi người dùng mới 
 
 ---
 **Lưu ý:** Tuyệt đối không push file `.env` lên GitLab/GitHub để đảm bảo an toàn cho tài khoản RunPod của bạn.
+
+
+cd "omnivoice_runpod_serverless"
+
+# 1. Pull image cũ về làm cache (giúp build nhanh hơn)
+docker pull nguyendangtri070304/omnivoice-runpod-worker:<tag_cũ>
+
+# 2. Build image mới
+docker build -f serverless/Dockerfile \
+  --cache-from nguyendangtri070304/omnivoice-runpod-worker:<tag_cũ> \
+  -t nguyendangtri070304/omnivoice-runpod-worker:<tag_mới> .
+
+# 3. Push image mới lên Docker Hub
+docker push nguyendangtri070304/omnivoice-runpod-worker:<tag_mới>
+
+docker compose up -d --build web
+
+
+docker push nguyendangtri070304/omnivoice-runpod-worker:my5
