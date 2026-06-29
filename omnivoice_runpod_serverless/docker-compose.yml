@@ -33,7 +33,6 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-      - web/.env.runpod-web
     environment:
       - DATABASE_URL=postgresql+psycopg://${OMNIVOICE_ADMIN_USER}:${OMNIVOICE_ADMIN_PASSWORD}@db:${POSTGRES_PORT:-5433}/${POSTGRES_DB}
     ports:
